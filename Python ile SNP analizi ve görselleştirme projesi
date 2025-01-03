@@ -1,0 +1,148 @@
+import pandas as pd
+from Bio import SeqIO
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+
+# 1. FASTA dosyasını okuma
+def read_fasta(file_path):
+    """FASTA dosyasını okur ve sekansı döndürür."""
+    record = SeqIO.read(file_path, "fasta")
+    return str(record.seq)
+
+# 2. SNP verilerini analiz etme
+def analyze_snps(genome_sequence, snp_positions):
+    """Genom sekansı içindeki SNP pozisyonlarını kontrol eder."""
+    snp_data = {}
+    for pos in snp_positions:
+        if 0 < pos <= len(genome_sequence):  # Pozisyonun geçerli olup olmadığını kontrol et
+            base = genome_sequence[pos - 1]  # 0-indeksli olduğundan -1 yapıyoruz
+            snp_data[pos] = base
+        else:
+            snp_data[pos] = "Invalid"
+    return snp_data
+
+# 3. SNP ve hastalık eşleştirme
+def match_snps_to_diseases(snp_data, disease_database):
+    """SNP verilerini hastalık veri tabanı ile eşleştirir."""
+    matched_diseases = []
+    for snp, base in snp_data.items():
+        if snp in disease_database.index:
+            diseases = disease_database.loc[snp, "Disease"]
+            matched_diseases.append((snp, base, diseases))
+        else:
+            matched_diseases.append((snp, base, "No Match"))
+    return matched_diseases
+
+# 4. Sonuçları görselleştirme
+def visualize_results(matched_results):
+    """Eşleşen SNP'leri ve hastalık sayılarını görselleştirir."""
+    disease_counts = {}
+    for _, _, diseases in matched_results:
+        if diseases != "No Match":
+            for disease in diseases.split(';'):
+                disease_counts[disease] = disease_counts.get(disease, 0) + 1
+
+    # Grafik oluşturma
+    plt.figure(figsize=(12, 8))
+    sns.barplot(x=list(disease_counts.keys()), y=list(disease_counts.values()), palette="viridis")
+    plt.xlabel('Hastalıklar')
+    plt.ylabel('SNP Sayısı')
+    plt.title('SNP ve Hastalık İlişkileri')
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.show()
+
+# 5. Sonuçları dosyaya kaydetme
+def save_results_to_csv(matched_results, output_file):
+    """Sonuçları bir CSV dosyasına kaydeder."""
+    df = pd.DataFrame(matched_results, columns=["SNP Position", "Base", "Diseases"])
+    df.to_csv(output_file, index=False)
+
+# 6. İstatistiksel özet oluşturma
+def summarize_results(matched_results):
+    """Analiz sonuçlarının özetini oluşturur."""
+    total_snps = len(matched_results)
+    matched_snps = len([result for result in matched_results if result[2] != "No Match"])
+    unmatched_snps = total_snps - matched_snps
+
+    print("\nAnaliz Özeti:")
+    print(f"Toplam SNP Sayısı: {total_snps}")
+    print(f"Eşleşen SNP Sayısı: {matched_snps}")
+    print(f"Eşleşmeyen SNP Sayısı: {unmatched_snps}")
+
+# 7. SNP ve hastalık detay raporu oluşturma
+def detailed_report(matched_results, output_file):
+    """SNP ve hastalık detaylarını bir rapor dosyasına kaydeder."""
+    df = pd.DataFrame(matched_results, columns=["SNP Position", "Base", "Diseases"])
+    report = """
+    ===== SNP Analiz Raporu =====
+    Toplam SNP Sayısı: {total_snps}
+    Eşleşen SNP Sayısı: {matched_snps}
+    Eşleşmeyen SNP Sayısı: {unmatched_snps}
+    """.format(
+        total_snps=len(matched_results),
+        matched_snps=len([r for r in matched_results if r[2] != "No Match"]),
+        unmatched_snps=len([r for r in matched_results if r[2] == "No Match"])
+    )
+    with open(output_file, "w") as f:
+        f.write(report)
+        f.write("\n\nDetaylı Eşleşmeler:\n")
+        df.to_string(f, index=False)
+
+# 8. Hastalık kategorilerine göre SNP analizi
+def categorize_by_disease(matched_results):
+    """Hastalık kategorilerine göre SNP sayısını hesaplar."""
+    categories = {}
+    for _, _, diseases in matched_results:
+        if diseases != "No Match":
+            for disease in diseases.split(';'):
+                category = disease.split('-')[0]  # Örnek: Kanser-Akut Lösemi
+                categories[category] = categories.get(category, 0) + 1
+
+    # Kategori grafiği oluşturma
+    plt.figure(figsize=(10, 6))
+    sns.barplot(x=list(categories.keys()), y=list(categories.values()), palette="coolwarm")
+    plt.xlabel('Hastalık Kategorileri')
+    plt.ylabel('SNP Sayısı')
+    plt.title('Hastalık Kategorilerine Göre SNP Analizi')
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.show()
+
+# Örnek veri yolları
+fasta_file = "genome.fasta"
+disease_db_file = "disease_database.csv"
+output_file = "analysis_results.csv"
+report_file = "detailed_report.txt"
+
+# SNP pozisyonları (örnek olarak)
+snp_positions = [100, 200, 300, 400, 5000]  # Örnek olarak hatalı pozisyon eklendi
+
+# Veri tabanını okuma
+disease_database = pd.read_csv(disease_db_file, index_col="SNP_Position")
+
+# İşlem adımları
+genome_sequence = read_fasta(fasta_file)
+snp_data = analyze_snps(genome_sequence, snp_positions)
+matched_results = match_snps_to_diseases(snp_data, disease_database)
+
+# Sonuçları yazdırma
+print("SNP Analiz Sonuçları:")
+for result in matched_results:
+    print(f"Pozisyon: {result[0]}, Baz: {result[1]}, Hastalık(lar): {result[2]}")
+
+# Sonuçları görselleştirme
+visualize_results(matched_results)
+
+# Hastalık kategorilerine göre analiz
+categorize_by_disease(matched_results)
+
+# Sonuçları dosyaya kaydetme
+save_results_to_csv(matched_results, output_file)
+
+# Detaylı rapor oluşturma
+detailed_report(matched_results, report_file)
+
+# Analiz özetini yazdırma
+summarize_results(matched_results)
